@@ -1,0 +1,2377 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Feedback System</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script type="text/javascript">
+
+        //A global variable used to detect if the logged in user is admin or not
+        var globalAdminFlag = null;
+        //A global variable to store the current user's employeeId
+        var globalEmployeeId = null;
+
+        // (Will get rid of these global variables later)
+        var globalRating1;
+        var globalRating2;
+        var globalRating3;
+        var globalRating4;
+        var globalChosenDepartment;
+        var globalFilteredDepartment;
+
+        $(document).ready(function () {
+            showHomeTab();
+        });
+
+        function showHomeTab() {
+            tabContentElems = document.getElementsByClassName("tabContent");
+            for (i = 0; i < tabContentElems.length; i++) {
+                tabContentElems[i].style.display = "none";
+            }
+        }
+
+        function showTab(event, tabName) {
+            document.getElementById('loginPage').style.display = "none";
+            // Declare all variables
+            var i, tabContentElems, tabLinkElems;
+
+            // Get all elements with class="tabContent" and hide them
+            tabContentElems = document.getElementsByClassName("tabContent");
+            for (i = 0; i < tabContentElems.length; i++) {
+                tabContentElems[i].style.display = "none";
+            }
+
+            // Get all elements with class="tabLink" and remove class "active"
+            tabLinkElems = document.getElementsByClassName("tabLink");
+            for (i = 0; i < tabLinkElems.length; i++) {
+                tabLinkElems[i].className =
+                    tabLinkElems[i].className.replace(" active", "");
+            }
+
+            // Show the current tab, and add an "active" class to the link
+            document.getElementById(tabName).style.display = "block";
+            event.className += " active";
+            // removed event.currentTarget.className
+        }
+
+        function goToHome(adminFlag) {
+            if (adminFlag) {
+                showTab(event, 'homePage2');
+            }
+            else {
+                showTab(event, 'homePage');
+            }
+        }
+
+        function LogonShowTab(event, tabName) {
+
+            var uidValue = document.getElementById("inputEmployeeId").value;
+            var passValue = document.getElementById("inputPassword").value;
+
+            var webMethod = "ProjectServices.asmx/LogOn";
+            var parameters = "{\"uid\":\"" + encodeURI(uidValue) + "\",\"pass\":\"" + encodeURI(passValue) + "\"}";
+             
+            //jQuery ajax method
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var currentLogon = msg.d;           
+
+                    if (currentLogon.success == true) {
+                        //set globalemployeeId
+                        globalEmployeeId = currentLogon.employeeId;
+
+                        if (currentLogon.adminFlag == true) {
+                            //set global admin flag
+                            globalAdminFlag = true;
+
+                            document.getElementById('loginPage').style.display = "none";
+                             
+                            showTab(event, 'homePage2');
+                        }
+                        else {
+                            //set global admin flag
+                            globalAdminFlag = false;
+
+                            document.getElementById('loginPage').style.display = "none";
+                             
+                            showTab(event, 'homePage');
+                        }
+
+                    }
+                    else {
+                        alert("Employee ID or password is incorrect. Please try again.");
+
+                        document.getElementById("inputPassword").value = "Password";
+                    }
+                },
+                error: function (e) {
+                     
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        function logout() {
+
+            var webMethod = "ProjectServices.asmx/LogOn";
+            var parameters = "{\"uid\":\"" + encodeURI("logmeout") + "\",\"pass\":\"" + encodeURI("123456") + "\"}";
+
+            jQuery.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var responseFromServer = msg.d;
+
+                    if (responseFromServer == true) {
+                        alert("Logout Failed");
+                    }
+                    else {
+                        window.location.reload();
+                    }
+                },
+                error: function (e) {
+                    window.location.reload();
+                }
+            });
+
+            //clear global variables when logging off
+            globalAdmingflag = null;
+            globalEmployeeId = null;
+        }
+
+        //Dispalys account request on accountsListPage
+        function LoadAccountRequests() {
+            document.getElementById("pendingAccountRequestList").innerHTML = "";
+
+            var webMethod = "ProjectServices.asmx/GetAccountRequests";
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+
+                    if (msg.d.length > 0) {
+                        for (var i = 0; i < msg.d.length; i++) {
+                            req = "<li class=\"accountList\"> <a href=\"#\" class=\"accountLA\" \"accountLA:hover\" ID='" + msg.d[i].employeeId + "' onclick=\"showTab(event, 'accountApprovalPage'); LoadAccountRequestDetail(this.id);\">"
+                                + "#" + "<strong>" + msg.d[i].employeeId + "</strong>" + " - " + msg.d[i].firstName + " " + msg.d[i].lastName
+                                + "</a></li>";                               
+                            $("#pendingAccountRequestList").append(req);
+
+                            accountElems = document.getElementsByClassName("accountLA");
+                            for (j = 0; j < accountElems.length; j++) {
+                                accountElems[j].ID = msg.d[i].employeeId;
+                            }
+                        } 
+
+                        document.getElementById('loginPage').style.display = "none";
+                        showTab(event, 'accountsListPage');
+                    }
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        //Dispalys all feedback on feedback list page
+        function LoadAllFeedback() {
+
+            displayTable = document.getElementById("allfeedbackTable");
+
+            for (var i = displayTable.rows.length; i > 1; i--) {
+                displayTable.deleteRow(i - 1);
+            }
+
+            var webMethod = "ProjectServices.asmx/GetAllFeedback";
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+
+                    if (msg.d.length > 0) {
+
+                        for (var i = 0; i < msg.d.length; i++) {
+                            var id = msg.d[i].feedbackRecordId;
+                            var row = 
+                                "<tr><td><a href=\"#\" class=\"accountLA accountLA:hover\" onclick=\"showTab(event, 'feedbackDetailPage'); LoadFeedbackDetail(" + id + ");\">" + msg.d[i].department + "</a></td>"
+                                    + "<td><a href=\"#\" class=\"accountLA accountLA:hover\" onclick=\"showTab(event, 'feedbackDetailPage'); LoadFeedbackDetail(" + id + ");\">" + msg.d[i].overallRating + "</a></td>"
+                                    + "<td><a href=\"#\" class=\"accountLA accountLA:hover\" onclick=\"showTab(event, 'feedbackDetailPage'); LoadFeedbackDetail(" + id + ");\">" + msg.d[i].feedbackDate + "</a></td></tr>";
+
+                            $("#allfeedbackTable tbody").append(row);
+                        }
+
+                        var filterHeader = document.getElementById("filteredCategory");
+                        filterHeader.innerHTML = "Feedback: " + globalFilteredDepartment;
+                       
+                        document.getElementById('loginPage').style.display = "none";
+                        showTab(event, 'feedbackListPage');
+                    }
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        //Dispalys filtered feedback on feedback list page
+        function LoadFilteredFeedback(departmentValue) {
+
+            displayTable = document.getElementById("allfeedbackTable");
+
+            for (var i = displayTable.rows.length; i > 1; i--) {
+                displayTable.deleteRow(i - 1);
+            }
+
+            var webMethod = "ProjectServices.asmx/GetFilteredFeedback";
+            var parameters = "{\"departmentValue\":\"" + encodeURI(departmentValue) + "\"}";
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+
+                    if (msg.d.length > 0) {
+
+                        for (var i = 0; i < msg.d.length; i++) {
+                            var id = msg.d[i].feedbackRecordId;
+                            var row =
+                                "<tr><td><a href=\"#\" class=\"accountLA accountLA:hover\" onclick=\"showTab(event, 'feedbackDetailPage'); LoadFeedbackDetail(" + id + ");\">" + msg.d[i].department + "</a></td>"
+                                + "<td><a href=\"#\" class=\"accountLA accountLA:hover\" onclick=\"showTab(event, 'feedbackDetailPage'); LoadFeedbackDetail(" + id + ");\">" + msg.d[i].overallRating + "</a></td>"
+                                + "<td><a href=\"#\" class=\"accountLA accountLA:hover\" onclick=\"showTab(event, 'feedbackDetailPage'); LoadFeedbackDetail(" + id + ");\">" + msg.d[i].feedbackDate + "</a></td></tr>";
+
+                            $("#allfeedbackTable tbody").append(row);
+                        }
+                        
+                        var filterHeader = document.getElementById("filteredCategory");
+                        filterHeader.innerHTML = "Feedback: " + globalFilteredDepartment;
+
+                        document.getElementById('loginPage').style.display = "none";
+                        showTab(event, 'feedbackListPage');
+                    }
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        //Dispalys feedback detail on feedback details page
+        function LoadFeedbackDetail(recordIdValue) {
+
+            var webMethod = "ProjectServices.asmx/GetFeedbackDetail";            
+            var parameters = "{\"recordIdValue\":\"" + encodeURI(recordIdValue) + "\"}";
+                                   
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                                       
+                    var feedbackDetail = msg.d;
+
+                    feedbackHeader = document.getElementById("feedbackDetailHeader");
+                    question1 = document.getElementById("viewDetailQ1");
+                    question2 = document.getElementById("viewDetailQ2");
+                    question3 = document.getElementById("viewDetailQ3");
+                    question4 = document.getElementById("viewDetailQ4");
+
+                    question1.disabled = true;
+                    question2.disabled = true;
+                    question3.disabled = true;
+                    question4.disabled = true;
+
+
+                    starRatingElements = document.getElementsByClassName("viewFeedbackRatingStar");
+
+                    for (var i = 0; i < starRatingElements.length; i++) {
+                        
+                        starRatingElements[i].disabled = false;
+                    }
+
+                    for (var i = 0; i < starRatingElements.length; i++) {
+                       
+                        starRatingElements[i].disabled = true;
+                    }
+
+                    if (feedbackDetail.feedbackRating1 == 1) {
+                        document.getElementById("rating-1da").checked = true;
+                    } else if (feedbackDetail.feedbackRating1 == 2) {
+                        document.getElementById("rating-2da").checked = true;
+                    } else if (feedbackDetail.feedbackRating1 == 3) {
+                        document.getElementById("rating-3da").checked = true;
+                    } else if (feedbackDetail.feedbackRating1 == 4) {
+                        document.getElementById("rating-4da").checked = true;
+                    } else if (feedbackDetail.feedbackRating1 == 5) {
+                        document.getElementById("rating-5da").checked = true;
+                    }
+
+                    if (feedbackDetail.feedbackRating2 == 1) {
+                        document.getElementById("rating-1db").checked = true;
+                    } else if (feedbackDetail.feedbackRating2 == 2) {
+                        document.getElementById("rating-2db").checked = true;
+                    } else if (feedbackDetail.feedbackRating2 == 3) {
+                        document.getElementById("rating-3db").checked = true;
+                    } else if (feedbackDetail.feedbackRating2 == 4) {
+                        document.getElementById("rating-4db").checked = true;
+                    } else if (feedbackDetail.feedbackRating2 == 5) {
+                        document.getElementById("rating-5db").checked = true;
+                    }
+
+                    if (feedbackDetail.feedbackRating3 == 1) {
+                        document.getElementById("rating-1dc").checked = true;
+                    } else if (feedbackDetail.feedbackRating3 == 2) {
+                        document.getElementById("rating-2dc").checked = true;
+                    } else if (feedbackDetail.feedbackRating3 == 3) {
+                        document.getElementById("rating-3dc").checked = true;
+                    } else if (feedbackDetail.feedbackRating3 == 4) {
+                        document.getElementById("rating-4dc").checked = true;
+                    } else if (feedbackDetail.feedbackRating3 == 5) {
+                        document.getElementById("rating-5dc").checked = true;
+                    }
+
+                    if (feedbackDetail.feedbackRating2 == 1) {
+                        document.getElementById("rating-1dd").checked = true;
+                    } else if (feedbackDetail.feedbackRating4 == 2) {
+                        document.getElementById("rating-2dd").checked = true;
+                    } else if (feedbackDetail.feedbackRating4 == 3) {
+                        document.getElementById("rating-3dd").checked = true;
+                    } else if (feedbackDetail.feedbackRating4 == 4) {
+                        document.getElementById("rating-4dd").checked = true;
+                    } else if (feedbackDetail.feedbackRating4 == 5) {
+                        document.getElementById("rating-5dd").checked = true;
+                    }
+
+                    feedbackHeader.innerHTML = "Anonymous Feedback for " + feedbackDetail.department;
+                    question1.innerHTML = feedbackDetail.feedbackText1;
+                    question2.innerHTML = feedbackDetail.feedbackText2;
+                    question3.innerHTML = feedbackDetail.feedbackText3;
+                    question4.innerHTML = feedbackDetail.feedbackText4;                        
+
+                    document.getElementById('loginPage').style.display = "none";
+                    showTab(event, 'feedbackDetailPage');
+
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+  
+        function LoadAccountRequestDetail(ID) {
+             
+            var employeeIdValue = ID;
+             
+            var webMethod = "ProjectServices.asmx/GetAccountRequestDetails";
+            var parameters = "{\"employeeId\":\"" + encodeURI(employeeIdValue) + "\"}";
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var accountRequestDetail = msg.d;
+
+                    var id = document.getElementById("ArDetailEmployeeId");
+                    id.value = accountRequestDetail.employeeId;
+
+                    var fName = document.getElementById("ArDetailFirstName");
+                    fName.value = accountRequestDetail.firstName;
+
+                    var lName = document.getElementById("ArDetailLastName");
+                    lName.value = accountRequestDetail.lastName;
+
+                    var email = document.getElementById("ArDetailEmail")
+                    email.value = accountRequestDetail.email;
+                },
+                error: function (e) {
+                     
+                    alert("this code will only execute if javascript is unable to access the webservice");
+                }
+            });
+        }
+
+        function LoadAccountEditDetail(employeeId) {
+
+            var employeeIdValue = employeeId;
+
+            var webMethod = "ProjectServices.asmx/GetAccount";
+            var parameters = "{\"employeeId\":\"" + encodeURI(employeeIdValue) + "\"}";
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var accountDetail = msg.d;
+
+                    var id = document.getElementById("EditID");
+                    id.value = accountDetail.employeeId;
+
+                    var password = document.getElementById("EditPW");
+                    password.value = accountDetail.password;
+
+                    var fName = document.getElementById("EditFN");
+                    fName.value = accountDetail.firstName;
+                    
+                    var lName = document.getElementById("EditLN");
+                    lName.value = accountDetail.lastName;
+
+                    var email = document.getElementById("EditEM")
+                    email.value = accountDetail.email;
+                    
+                    showTab(event, 'editProfilePage')
+                },
+                error: function (e) {
+                    alert("this code will only execute if javascript is unable to access the webservice");
+                }
+            });
+        }
+
+        function DenyAccount() {
+            var employeeIdValue = document.getElementById("ArDetailEmployeeId").value;
+
+            var webMethod = "ProjectServices.asmx/DenyAccountRequest";
+            var parameters = "{\"employeeId\":\"" + encodeURI(employeeIdValue) + "\"}";
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var accountDenyMsg = msg.d;
+                },
+                error: function (e) {                    
+                    alert("this code will only execute if javascript is unable to access the webservice");
+                }
+            });
+        }
+
+        function ApproveAccount() {
+            var employeeIdValue = document.getElementById("ArDetailEmployeeId").value;
+
+            var webMethod = "ProjectServices.asmx/ApproveAccountRequest";
+            var parameters = "{\"employeeId\":\"" + encodeURI(employeeIdValue) + "\"}";
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var accountDenyMsg = msg.d;
+                },
+                error: function (e) {
+
+                    alert("this code will only execute if javascript is unable to access the webservice");
+                }
+            });
+        }
+
+        function RquestAccount() {
+            var employeeIdValue = document.getElementById("EID").value;
+            var passwordValue = document.getElementById("PW").value;
+            var firstNameValue = document.getElementById("FN").value;
+            var lastNameValue = document.getElementById("LN").value;
+            var emailValue = document.getElementById("EM").value;
+
+            var webMethod = "ProjectServices.asmx/AccountRequest";
+            var parameters = "{\"employeeId\":\"" + encodeURI(employeeIdValue) + "\",\"password\":\"" + encodeURI(passwordValue) + "\",\"fName\":\"" + encodeURI(firstNameValue) + "\",\"lName\":\"" + encodeURI(lastNameValue) + "\",\"email\":\"" + encodeURI(emailValue) + "\"}";
+
+            showTab(event, 'loginPage');
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var accountRequestMsg = msg.d;
+
+                },
+                error: function (e) {
+
+                    alert("this code will only execute if javascript is unable to access the webservice");
+                }
+            });
+        }
+
+        function EditAccount() {
+             
+            var employeeIdValue = document.getElementById("EditID").value;
+            var passwordValue = document.getElementById("EditPW").value;            
+            var firstNameValue = document.getElementById("EditFN").value;            
+            var lastNameValue = document.getElementById("EditLN").value;            
+            var emailValue = document.getElementById("EditEM").value;
+
+            var webMethod = "ProjectServices.asmx/EditProfile";
+            var parameters = "{\"employeeId\":\"" + encodeURI(employeeIdValue) + "\",\"password\":\"" + encodeURI(passwordValue) + "\",\"fName\":\"" + encodeURI(firstNameValue) + "\",\"lName\":\"" + encodeURI(lastNameValue) + "\",\"email\":\"" + encodeURI(emailValue) + "\"}";
+
+            goToHome(globalAdminFlag);
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var editProfileMsg = msg.d;
+                },
+                error: function (e) {
+                    alert("this code will only execute if javascript is unable to access the webservice");
+                }
+            });
+        }
+
+        function ViewRankings() {
+
+            var webMethod = "ProjectServices.asmx/ViewRankings";
+            var parameters = "{\"test\":\"" + encodeURI("test") + "\"}";
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var currentRankings = msg.d;
+
+                    var depOneH3 = document.getElementById("rankingsDep13");
+                    var depTwoH3 = document.getElementById("rankingsDep23");
+                    var depThreeH3 = document.getElementById("rankingsDep33");
+                    var depFourH3 = document.getElementById("rankingsDep43");
+                    var depFiveH3 = document.getElementById("rankingsDep53");
+
+                    var depOneH4 = document.getElementById("rankingsDep14");
+                    var depTwoH4 = document.getElementById("rankingsDep24");
+                    var depThreeH4 = document.getElementById("rankingsDep34");
+                    var depFourH4 = document.getElementById("rankingsDep44");
+                    var depFiveH4 = document.getElementById("rankingsDep54");
+
+                    depOneH3.innerHTML = "1. " + currentRankings.department1;
+                    depTwoH3.innerHTML= "2. " + currentRankings.department2;
+                    depThreeH3.innerHTML = "3. " + currentRankings.department3;
+                    depFourH3.innerHTML = "4. " + currentRankings.department4;
+                    depFiveH3.innerHTML = "5. " + currentRankings.department5;
+
+                    depOneH4.innerHTML = currentRankings.rating1 + " rating - " + currentRankings.response1 + " responses";
+                    depTwoH4.innerHTML = currentRankings.rating2 + " rating - " + currentRankings.response2 + " responses";
+                    depThreeH4.innerHTML = currentRankings.rating3 + " rating - " + currentRankings.response3 + " responses";
+                    depFourH4.innerHTML= currentRankings.rating4 + " rating - " + currentRankings.response4 + " responses";
+                    depFiveH4.innerHTML = currentRankings.rating5 + " rating - " + currentRankings.response5 + " responses";
+
+                    showTab(event, 'viewRankingsPage')                                 
+                },
+                error: function (e) {
+
+                    alert(e);
+                }
+            });
+        }
+
+        function LoadActiveAccounts() {
+            document.getElementById("activeAccountList").innerHTML = "";
+
+            var webMethod = "ProjectServices.asmx/GetActiveAccounts";
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+
+                    if (msg.d.length > 0) {
+                        for (var i = 0; i < msg.d.length; i++) {
+                            req = "<li class=\"accountList\"> <a href=\"#\" class=\"accountLA\" \"accountLA:hover\" ID='" + msg.d[i].employeeId + "' onclick=\"showTab(event, 'accountDisablePage'); LoadActiveAccountDetail(this.id);\">"
+                                + "#" + "<strong>" + msg.d[i].employeeId + "</strong>" + " - " + msg.d[i].firstName + " " + msg.d[i].lastName
+                                + "</a></li>";
+                            $("#activeAccountList").append(req);
+                        }
+                        document.getElementById('loginPage').style.display = "none";
+                        showTab(event, 'activeAccountsPage');
+                    }
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        function LoadActiveAccountDetail(ID) {
+
+            var employeeIdValue = ID;
+
+            var webMethod = "ProjectServices.asmx/GetActiveAccountDetails";
+            var parameters = "{\"employeeId\":\"" + encodeURI(employeeIdValue) + "\"}";
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var accountRequestDetail = msg.d;
+
+                    var id = document.getElementById("disableEmployeeId");
+                    id.value = accountRequestDetail.employeeId;
+
+                    var fName = document.getElementById("disableFirstName");
+                    fName.value = accountRequestDetail.firstName;
+
+                    var lName = document.getElementById("disableLastName");
+                    lName.value = accountRequestDetail.lastName;
+
+                    var email = document.getElementById("disableEmail")
+                    email.value = accountRequestDetail.email;
+
+                    var makeAdmin = document.getElementById("adminAccountButton");
+
+                    if (accountRequestDetail.adminFlag == true) {
+                        makeAdmin.innerHTML = "Disable Admin";
+                    } else {
+                        makeAdmin.innerHTML = "Make Admin";
+                    }          
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        function DisableAccount() {
+            var employeeIdValue = document.getElementById("disableEmployeeId").value;
+
+            var webMethod = "ProjectServices.asmx/DisableAccount";
+            var parameters = "{\"employeeId\":\"" + encodeURI(employeeIdValue) + "\", \"disableFlag\":\"" + "X" + "\"}";
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var disableAccountMsg = msg.d;
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        function LoadDisabledAccounts() {
+            document.getElementById("disableAccountList").innerHTML = "";
+
+            var webMethod = "ProjectServices.asmx/GetDisabledAccounts";
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+
+                    if (msg.d.length > 0) {
+                        for (var i = 0; i < msg.d.length; i++) {
+                            req = "<li class=\"accountList\"> <a href=\"#\" class=\"accountLA\" \"accountLA:hover\" ID='" + msg.d[i].employeeId + "' onclick=\"showTab(event, 'accountEnablePage'); LoadDisabledAccountDetail(this.id);\">"
+                                + "#" + "<strong>" + msg.d[i].employeeId + "</strong>" + " - " + msg.d[i].firstName + " " + msg.d[i].lastName
+                                + "</a></li>";
+                            $("#disableAccountList").append(req);
+                        }
+                        document.getElementById('loginPage').style.display = "none";
+                        showTab(event, 'disableAccountListPage');
+                    }
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        function LoadDisabledAccountDetail(ID) {
+            var employeeIdValue = ID;
+
+            var webMethod = "ProjectServices.asmx/GetDisabledAccountDetails";
+            var parameters = "{\"employeeId\":\"" + encodeURI(employeeIdValue) + "\"}";
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var accountRequestDetail = msg.d;
+
+                    var id = document.getElementById("enableEmployeeId");
+                    id.value = accountRequestDetail.employeeId;
+
+                    var fName = document.getElementById("enableFirstName");
+                    fName.value = accountRequestDetail.firstName;
+
+                    var lName = document.getElementById("enableLastName");
+                    lName.value = accountRequestDetail.lastName;
+
+                    var email = document.getElementById("enableEmail")
+                    email.value = accountRequestDetail.email;
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        function EnableAccount() {
+            var employeeIdValue = document.getElementById("enableEmployeeId").value;
+
+            var webMethod = "ProjectServices.asmx/EnableAccount";
+            var parameters = "{\"employeeId\":\"" + encodeURI(employeeIdValue) + "\"}";
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var enableAccountMsg = msg.d;
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        function adminDecide() {
+            var checkAdmin = document.getElementById("adminAccountButton");
+
+            if (checkAdmin.innerHTML == "Make Admin") {
+                makeAdmin();
+            } else {
+                disableAdmin();
+            }
+        }
+
+        function disableAdmin() {
+            var employeeIdValue = document.getElementById("enableEmployeeId").value;
+
+            var webMethod = "ProjectServices.asmx/DisableAdmin";
+            var parameters = "{\"employeeId\":\"" + encodeURI(employeeIdValue) + "\"}";
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var enableAccountMsg = msg.d;
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        function makeAdmin() {
+            var employeeIdValue = document.getElementById("disableEmployeeId").value;
+
+            var webMethod = "ProjectServices.asmx/MakeAdmin";
+            var parameters = "{\"employeeId\":\"" + encodeURI(employeeIdValue) + "\", \"enableFlag\":\"" + "X" + "\"}";
+
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var disableAccountMsg = msg.d;
+
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        //Function which will store employee's feedback 
+        function InsertFeedback() {
+            var q1value = document.getElementById("Q1").value;
+            var q1Rating = globalRating1;
+            var q2value = document.getElementById("Q2").value;
+            var q2Rating = globalRating2;
+            var q3value = document.getElementById("Q3").value;
+            var q3Rating = globalRating3;
+            var q4value = document.getElementById("Q4").value;
+            var q4Rating = globalRating4;
+            var department = globalChosenDepartment;
+            
+            var webMethod = "ProjectServices.asmx/InsertFeedBack";
+            var parameters = "{\"EmployeeId\":\"" + encodeURI(globalEmployeeId) + "\",\"department\":\"" + encodeURI(department) + "\",\"FB1\":\"" + encodeURI(q1value) + "\",\"FBR1\":\"" + encodeURI(q1Rating) + "\",\"FB2\":\"" + encodeURI(q2value) + "\",\"FBR2\":\"" + encodeURI(q2Rating) + "\",\"FB3\":\"" + encodeURI(q3value) + "\",\"FBR3\":\"" + encodeURI(q3Rating) + "\",\"FB4\":\"" + encodeURI(q4value) + "\",\"FBR4\":\"" + encodeURI(q4Rating) + "\"}";
+            
+            $.ajax({
+                type: "POST",
+                url: webMethod,
+                data: parameters,
+
+                contentType: "application/json; charset=utf-8",
+                dataType: "json",
+                success: function (msg) {
+                    var responseFromServer = msg.d;
+
+                    goToHome(globalAdminFlag);
+                },
+                error: function (e) {
+                    alert("Error communicating with the server.");
+                }
+            });
+        }
+
+        $(document).ready(function () {
+
+            $('input[name*="rating1"]').change(function () {
+                var me = $(this);
+                var ratingValue1 = me.attr('value');
+
+                globalRating1 = ratingValue1;
+
+            });
+
+            $('input[name*="rating2"]').change(function () {
+                var me = $(this);
+                var ratingValue2 = me.attr('value');
+
+                globalRating2 = ratingValue2;
+
+            });
+
+            $('input[name*="rating3"]').change(function () {
+                var me = $(this);
+                var ratingValue3 = me.attr('value');
+
+                globalRating3 = ratingValue3;
+
+            });
+
+            $('input[name*="rating4"]').change(function () {
+                var me = $(this);
+                var ratingValue4 = me.attr('value');
+
+                globalRating4 = ratingValue4;
+
+            });
+        });
+
+        function selectedDepartment(department) {
+            globalChosenDepartment = department;
+        }
+
+        function filteredDepartment(department) {           
+            if (department != "View All") {
+                var splicedString = department.slice(0, -1);
+                globalFilteredDepartment = splicedString;
+            } else {
+                globalFilteredDepartment = department;
+            }           
+        }
+
+    </script>
+
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+    <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        /* For phones (portrait) unless another @media rule below is fired */
+        @media only screen and (max-width: 499px) {
+            .col-sm-00 {
+                display: none;
+            }
+
+            .col-md-01 {
+                width: 8.33%;
+            }
+
+            .col-md-02 {
+                width: 16.66%;
+            }
+
+            .col-md-03 {
+                width: 25.00%;
+            }
+
+            .col-md-04 {
+                width: 33.33%;
+            }
+
+            .col-md-05 {
+                width: 41.66%;
+            }
+
+            .col-md-06 {
+                width: 50.00%;
+            }
+
+            .col-md-07 {
+                width: 58.33%;
+            }
+
+            .col-md-08 {
+                width: 66.66%;
+            }
+
+            .col-md-09 {
+                width: 75.00%;
+            }
+
+            .col-md-10 {
+                width: 83.33%;
+            }
+
+            .col-md-11 {
+                width: 91.66%;
+            }
+
+            .col-sm-12 {
+                width: 100%;
+            }
+
+            body {
+                background-color: white;
+            }
+
+            [class*="col-sm-"] {
+                border: 4px solid rgba(255,255,255,0);
+                background-clip: padding-box;
+            }
+
+            button {
+                display: block;
+                width: 100%;
+                border: none;
+                background-color: #fc2403;
+                padding: 14px 28px;
+                font-size: 16px;
+                cursor: pointer;
+                text-align: center;
+                border-radius: 10px;
+                font-weight: 600;
+            }
+        }
+
+        /* For medium screens (e.g. landscape phones and portrait tablets) */
+        @media only screen and (min-width: 500px) {
+            .col-md-00 {
+                display: none;
+            }
+
+            .col-md-01 {
+                width: 8.33%;
+            }
+
+            .col-md-02 {
+                width: 16.66%;
+            }
+
+            .col-md-03 {
+                width: 25.00%;
+            }
+
+            .col-md-04 {
+                width: 33.33%;
+            }
+
+            .col-md-05 {
+                width: 41.66%;
+            }
+
+            .col-md-06 {
+                width: 50.00%;
+            }
+
+            .col-md-07 {
+                width: 58.33%;
+            }
+
+            .col-md-08 {
+                width: 66.66%;
+            }
+
+            .col-md-09 {
+                width: 75.00%;
+            }
+
+            .col-md-10 {
+                width: 83.33%;
+            }
+
+            .col-md-11 {
+                width: 91.66%;
+            }
+
+            .col-md-12 {
+                width: 100.00%;
+            }
+
+            body {
+                background-color: white;
+            }
+
+            body {
+                width: 60%;
+            }
+
+            [class*="col-md-"] {
+                border: 4px solid rgba(255,255,255,0);
+                background-clip: padding-box;
+            }
+
+            button {
+                display: block;
+                width: 100%;
+                border: none;
+                background-color: #fc2403;
+                padding: 14px 28px;
+                font-size: 14px;
+                cursor: pointer;
+                text-align: center;
+                border-radius: 10px;
+                font-weight: 600;
+            }
+        }
+
+        /* For large screens or landscape tablets*/
+        @media only screen and (min-width: 800px) {
+            .col-md-00 {
+                display: initial;
+            }
+
+            .col-sm-00 {
+                display: initial;
+            }
+
+            .col-lg-01 {
+                width: 8.33%;
+            }
+
+            .col-lg-02 {
+                width: 16.66%;
+            }
+
+            .col-lg-03 {
+                width: 25.00%;
+            }
+
+            .col-lg-04 {
+                width: 33.33%;
+            }
+
+            .col-lg-05 {
+                width: 41.66%;
+            }
+
+            .col-lg-06 {
+                width: 50.00%;
+            }
+
+            .col-lg-07 {
+                width: 58.33%;
+            }
+
+            .col-lg-08 {
+                width: 66.66%;
+            }
+
+            .col-lg-09 {
+                width: 75.00%;
+            }
+
+            .col-lg-10 {
+                width: 83.33%;
+            }
+
+            .col-lg-11 {
+                width: 91.66%;
+            }
+
+            .col-lg-12 {
+                width: 100.00%;
+            }
+
+            body {
+                background-color: white;
+            }
+
+            body {
+                width: 60%;
+            }
+
+            [class*="col-lg-"] {
+                border: 4px solid rgba(255,255,255,0);
+                background-clip: padding-box;
+            }
+
+            button {
+                display: block;
+                width: 100%;
+                border: none;
+                background-color: #fc2403;
+                padding: 14px 28px;
+                font-size: 16px;
+                cursor: pointer;
+                text-align: center;
+                border-radius: 10px;
+                font-weight: 600;
+            }
+        }
+
+        [class*="col-"] {
+            float: left;
+            border-radius: 10px;
+        }
+
+        .row::after {
+            content: "";
+            clear: both;
+            display: block;
+        }
+
+        .blu {
+            background-color: #0f3bfc;
+        }
+
+        .red {
+            background-color: #fc2403;
+        }
+
+        .gre {
+            background-color: #00c746;
+        }
+
+        .gry {
+            background-color: #dbdbdb;
+        }
+
+        .org {
+            background-color: #f29500;
+        }
+
+        .wht {
+            background-color: #ffffff;
+        }
+
+        .cya {
+            background-color: #4df3ff;
+        }
+
+        .pur {
+            background-color: #c60aff;
+        }
+
+        .pblu {
+            background-color: #bae1ff;
+        }
+
+        .pgre {
+            background-color: #baffc9;
+        }
+
+        .pred {
+            background-color: #ffb3ba;
+        }
+
+        .porg {
+            background-color: #ffdfba;
+        }
+
+        body {
+            font-family: sans-serif;
+            font-size: 1em;
+            text-align: center;
+            margin: auto;
+            background-image: url("img/background.jpg");
+            background-size: cover;
+            background-repeat: no-repeat;
+        }
+
+        .AppBackground {
+            background-color: rgba(255,255,255,.4);
+            height: 100%;
+        }
+
+        .boldbutton {
+            font-weight: 900;
+            padding-top: 10%;
+            padding-bottom: 10%;
+        }
+
+        input[type="text"], input[type="password"] {
+            text-align: left;
+            width: 100%;
+            padding: 2%;
+            background: #D3D3D3;
+            color: #676767;
+            font-size: 16px;
+            outline: none;
+            border: none;
+            border-radius: 4px;
+        }
+
+        .hoverPBlu:hover {
+            color: #75c0fa;
+        }
+
+        .hoverPGre:hover {
+            color: #5fe37c;
+        }
+
+        .hoverPOrg:hover {
+            color: #faac52;
+        }
+
+        .hoverPRed:hover {
+            color: #fa5766;
+        }
+
+        .hoverGre:hover {
+            color: #024200;
+        }
+
+        .hoverRed:hover {
+            color: #700101;
+        }
+
+        .hoverOrg:hover {
+            color: #995900;
+        }
+
+        .hoverCya:hover {
+            color: #0f3bfc;
+        }
+
+        .hoverBlu:hover {
+            color: #00186e;
+        }
+
+        .titleHeader {
+            background-color: rgba(255,255,255,.2);
+            color: white;
+            letter-spacing: 2px;
+        }
+
+        .whiteBut {
+            color: white;
+        }
+
+        .tallBut {
+            height: 70px;
+            font-size: 22px;
+        }
+
+        .questionSpan {
+            text-align: left;
+            width: 100%;
+            padding: 0;
+            display: block;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            resize: none;
+        }
+
+        .star-cb-group {
+            font-size: 0;
+            unicode-bidi: bidi-override;
+            direction: rtl;
+        }
+
+        .star-cb-group * {
+            font-size: 1rem;
+        }
+
+        .star-cb-group > input {
+            display: none;
+        }
+
+        .star-cb-group > input + label {
+            display: inline-block;
+            cursor: pointer;
+        }
+
+        .star-cb-group label:before {
+            content: '\f005';
+            font-family: fontAwesome;
+            position: relative;
+            display: block;
+            font-size: 30px;
+            color: white;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, .5);
+        }
+
+        .star-cb-group > input:checked ~ label:before, .star-cb-group > input {
+           content: '\f005';
+           font-family: fontAwesome;
+           color: yellow;
+        }
+
+        .star-cb-group > .star-cb-clear + label {
+           width: .5em;
+           margin-left: -.5em;
+        }
+
+        .star-cb-group > .star-cb-clear + label:before {
+           width: .5em;
+        }
+
+        .transBut {
+            background-color: rgba(0, 0, 0, 0);
+            color: white;
+            font-weight: 900;
+            font-size: 25px;
+        }
+
+        .accountA {
+            color: white;
+            text-decoration: none;
+        }
+
+            .accountA:hover {
+                color: #f29500;
+                cursor: pointer;
+            }
+
+        .accountD {
+            color: navy;
+            text-decoration: none;
+        }
+
+            .accountD:hover {
+                color: white;
+                cursor: pointer;
+            }
+
+        .head {
+            margin-left: auto;
+            margin-right: auto;
+            text-align: center;
+        }
+
+        @media (max-width:540px) {
+            .head img {
+                width: 30%;
+            }
+        }
+
+        @media (max-width:320px) {
+            .head img {
+                width: 20%;
+            }
+        }
+
+        .accountList {
+            text-align: left;
+            padding-left: 2%;
+        }
+
+        .feedbackList {
+            text-align: left;
+            padding-left: 1%;
+        }
+
+        .accountLA {
+            text-decoration: none;
+            color: black;
+        }
+
+        .accountLA:hover {
+            text-decoration: none;
+            color: navy;
+            cursor: pointer;
+        }
+
+        #allfeedbackTable {
+            font-family: arial, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        td, th {
+            border: 1px solid black;
+            text-align: left;
+            padding: 8px;
+        }
+
+        tr:nth-child(even) {
+            background-color: #babdcc;
+        }
+
+        th {
+            background-color: #313a66;
+            color: white;
+        }
+
+        .rankingFormat3 {
+            color: white;
+            text-align: left;
+            padding-left: 3%;
+            padding-top: 0;
+            padding-bottom: 0;
+            margin-top: 2%;
+            margin-bottom: 0;
+        }
+
+        .rankingFormat4 {
+            color: white;
+            text-align: left;
+            padding-left: 3%;
+            padding-top: 0;
+            padding-bottom: 0;
+            margin-top: 1%;
+            margin-bottom: 2%;
+        }
+
+        .customH2 {
+            margin-bottom: 0;
+        }
+
+        .customH4 {
+            color: navy;
+            text-align: center;
+            padding-top: 0;
+            padding-bottom: 0;
+            margin-top: 0;
+            margin-bottom: 2%;
+        }
+    </style>
+
+</head>
+<body>
+    <div id="loginPage">
+        <br><br>
+        <div class="AppBackground centerDiv">
+            <br>
+            <div class="head">
+                <img src="img/user.png" alt="" />
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht transBut"><h2>Feedback</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="inputEmployeeId" type="text" class="text" value="Employee ID" onfocus="this.value = '';" onblur="if (this.value == '') {this.value = 'Employee ID';}"></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="inputPassword" type="password" class="text" value="Password" onfocus="this.value = '';" onblur="if (this.value == '') {this.value = 'Password';}"></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 org"><button class="org hoverOrg whiteBut" onclick="LogonShowTab(event, 'homePage')">Sign in</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <span><a class="accountA" onclick="showTab(event, 'accountRequestPage')">Request Account</a></span>
+            <br><br><br>
+        </div>
+        <br>
+    </div>
+
+    <div id="homePage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Home</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gre"><button class="gre hoverGre whiteBut tallBut" onclick="showTab(event, 'chooseDepartPage')">Create Feedback</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 blu"><button class="blu hoverBlu whiteBut tallBut" onclick="LoadAccountEditDetail(globalEmployeeId)">Edit Profile</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 org"><button class="org hoverOrg whiteBut tallBut" onclick="ViewRankings()">View Rankings</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br><br>
+            <div class="row">
+                <div class="col-lg-08 col-md-07 col-sm-07 wht"></div>
+                <div class="col-lg-04 col-md-05 col-sm-05 cya"><button class="cya hoverCya" onclick="logout()">Log off</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="homePage2" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Home</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gre"><button class="gre hoverGre whiteBut tallBut" onclick="showTab(event, 'chooseDepartPage')">Create Feedback</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 blu"><button class="blu hoverBlu whiteBut tallBut" onclick="LoadAccountEditDetail(globalEmployeeId)">Edit Profile</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 org"><button class="org hoverOrg whiteBut tallBut" onclick="ViewRankings()">View Rankings</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 red"><button class="red hoverRed whiteBut tallBut" onclick="showTab(event, 'adminHomePage')">Admin</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br><br>
+            <div class="row">
+                <div class="col-lg-08 col-md-07 col-sm-07 wht"></div>
+                <div class="col-lg-04 col-md-05 col-sm-05 cya"><button class="cya hoverCya" onclick="logout()">Log off</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="accountRequestPage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Request Account</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="EID" type="text" class="text" value="Employee ID" onfocus="this.value = '';" onblur="if (this.value == '') {this.value = 'Employee ID';}"></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="PW" type="password" class="text" value="Password" onfocus="this.value = '';" onblur="if (this.value == '') {this.value = 'Password';}"></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="FN" type="text" class="text" value="First name" onfocus="this.value = '';" onblur="if (this.value == '') {this.value = 'First name';}"></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="LN" type="text" class="text" value="Last name" onfocus="this.value = '';" onblur="if (this.value == '') {this.value = 'Last Name';}"></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="EM" type="text" class="text" value="Email" onfocus="this.value = '';" onblur="if (this.value == '') {this.value = 'Email';}"></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gre"><button class="gre hoverGre whiteBut" onclick="RquestAccount()">Request Account</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 org"><button class="org hoverorg whiteBut" onclick="showTab(event, 'loginPage')">Sign in instead</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br><br><br>
+        </div>
+    </div>
+
+    <div id="chooseDepartPage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Choose Department</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 pblu"><button id="CSales" value="Sales" class="pblu boldbutton hoverPBlu" onclick="showTab(event, 'feedbackPage'); selectedDepartment(this.value)">Sales</button></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 pgre"><button id="CHR" value="HR" class="pgre boldbutton hoverPGre" onclick="showTab(event, 'feedbackPage'); selectedDepartment(this.value)">HR</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 porg"><button id="CIT" value="IT" class="porg boldbutton hoverPOrg" onclick="showTab(event, 'feedbackPage'); selectedDepartment(this.value)">IT</button></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 pred"><button id="CMarketing" value="Marketing" class="pred boldbutton hoverPRed" onclick="showTab(event, 'feedbackPage'); selectedDepartment(this.value)">Marketing</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 pblu"><button id="CAccounting" value="Accounting" class="pblu boldbutton hoverPBlu" onclick="showTab(event, 'feedbackPage'); selectedDepartment(this.value)">Accounting</button></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 pgre"><button id="CService" value="Customer Service" class="pgre boldbutton hoverPGre" onclick="showTab(event, 'feedbackPage'); selectedDepartment(this.value)">Service</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 porg"><button id="COperations" value="Operations" class="porg boldbutton hoverPOrg" onclick="showTab(event, 'feedbackPage'); selectedDepartment(this.value)">Operations</button></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 pred"><button id="CDistribution" value="Distribution" class="pred boldbutton hoverPRed" onclick="showTab(event, 'feedbackPage'); selectedDepartment(this.value)">Distribution</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 org"><button class="org hoverorg whiteBut" onclick="goToHome(globalAdminFlag)">Go back</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+        </div>
+    </div>
+
+    <div id="adminHomePage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Admin Home</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gre"><button class="gre hoverGre whiteBut tallBut" onclick="LoadActiveAccounts()">Active Accounts</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 blu"><button class="blu hoverBlu whiteBut tallBut" onclick="LoadAccountRequests()">Pending Accounts</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 org"><button class="org hoverOrg whiteBut tallBut" onclick="showTab(event, 'viewByDepartPage')">View Feedback</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 red"><button class="red hoverRed whiteBut tallBut" onclick="goToHome(globalAdminFlag)">Go back</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br><br>
+        </div>
+    </div>
+
+    <div id="accountsListPage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Pending Accounts</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gry">
+                    <ul id="pendingAccountRequestList">
+                    </ul>
+                </div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 red"><button class="red hoverRed whiteBut" onclick="showTab(event, 'adminHomePage')">Go Back</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br><br>
+        </div>
+    </div>
+
+    <div id="activeAccountsPage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Active Accounts</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gry scrollableDiv">
+                    <ul id="activeAccountList"></ul>
+                </div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 org"><button class="org hoverOrg whiteBut" onclick="setTimeout(LoadDisabledAccounts(),1000)">View Disabled Accounts</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 red"><button class="red hoverRed whiteBut" onclick="showTab(event, 'adminHomePage')">Go Back</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+        </div>
+    </div>
+
+    <div id="disableAccountListPage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Disabled Accounts</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gry">
+                    <ul id="disableAccountList"></ul>
+                </div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 org"><button class="org hoverOrg whiteBut" onclick="setTimeout(LoadActiveAccounts(), 1000)">View Enabled Accounts</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 red"><button class="red hoverRed whiteBut" onclick="showTab(event, 'adminHomePage')">Go Back</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+        </div>
+    </div>
+
+    <div id="viewByDepartPage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>View by Department</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 pblu"><button id="SalesV" class="pblu boldbutton hoverPBlu" onclick="LoadFilteredFeedback('Sales'); filteredDepartment(this.id);">Sales</button></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 pgre"><button id="HRV" class="pgre boldbutton hoverPGre" onclick="LoadFilteredFeedback('HR'); filteredDepartment(this.id);">HR</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 porg"><button id="ITV" class="porg boldbutton hoverPOrg" onclick="LoadFilteredFeedback('IT'); filteredDepartment(this.id);">IT</button></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 pred"><button id="MarketingV" class="pred boldbutton hoverPRed" onclick="LoadFilteredFeedback('Marketing'); filteredDepartment(this.id);">Marketing</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 pblu"><button id="AccountingV" class="pblu boldbutton hoverPBlu" onclick="LoadFilteredFeedback('Accounting'); filteredDepartment(this.id);">Accounting</button></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 pgre"><button id="SerivceV" class="pgre boldbutton hoverPGre" onclick="LoadFilteredFeedback('Customer Service'); filteredDepartment(this.id);">Service</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 porg"><button id="OperationsV" class="porg boldbutton hoverPOrg" onclick="LoadFilteredFeedback('Operations'); filteredDepartment(this.id);">Operations</button></div>
+                <div class="col-lg-05 col-md-06 col-sm-06 pred"><button id="DistributionV" class="pred boldbutton hoverPRed" onclick="LoadFilteredFeedback('Distribution'); filteredDepartment(this.id);">Distribution</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gre"><button class="gre hoverGre whiteBut" onclick="LoadAllFeedback(); filteredDepartment('View All');">View all</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 red"><button class="red hoverRed whiteBut" onclick="showTab(event, 'adminHomePage')">Go back</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+        </div>
+        <br>
+    </div>
+
+    <div id="feedbackListPage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2 id="filteredCategory">Feedback List</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div id="allFeedbackContainer" class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gry">
+                    <table id="allfeedbackTable" class="fixed_header">
+                        <thead>
+                            <tr>
+                                <th>Department</th>
+                                <th>Rating</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allfeedbackTableBody">
+                        </tbody>                       
+                    </table>
+                </div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 red"><button class="red hoverRed whiteBut" onclick="showTab(event, 'viewByDepartPage')">Go Back</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br><br>
+        </div>
+    </div>
+
+    <div id="viewRankingsPage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Rankings</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gre"><h3 class="rankingFormat3" id="rankingsDep13"></h3><h4 class="rankingFormat4" id="rankingsDep14"></h4></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 org"><h3 class="rankingFormat3" id="rankingsDep23"></h3><h4 class="rankingFormat4" id="rankingsDep24"></h4></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 pur"><h3 class="rankingFormat3" id="rankingsDep33"></h3><h4 class="rankingFormat4" id="rankingsDep34"></h4></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 red"><h3 class="rankingFormat3" id="rankingsDep43"></h3><h4 class="rankingFormat4" id="rankingsDep44"></h4></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 blu"><h3 class="rankingFormat3" id="rankingsDep53"></h3><h4 class="rankingFormat4" id="rankingsDep54"></h4></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gre"><button class="gre hoverGre whiteBut" onclick="goToHome(globalAdminFlag)">Go back</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+        </div>
+        <br>
+    </div>
+
+    <div id="editProfilePage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Edit Profile</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input type="text" id="EditID" class="text" value="" disabled></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input type="password" id="EditPW" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input type="text" id="EditFN" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input type="text" id="EditLN" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input type="text" id="EditEM" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gre"><button class="gre hoverGre whiteBut" onclick="EditAccount()">Confirm</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+        </div>
+    </div>
+
+    <div id="feedbackPage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Anonymous Feedback</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><span class="questionSpan">How do you feel about your job?</span></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><textarea id="Q1" name="Text1" cols="40" rows="5"></textarea></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 rating">
+                    <div class="star-cb-group">
+                        <input type="radio" id="rating-5a" name="rating1" value="5" /><label for="rating-5a"></label>
+                        <input type="radio" id="rating-4a" name="rating1" value="4" /><label for="rating-4a"></label>
+                        <input type="radio" id="rating-3a" name="rating1" value="3" /><label for="rating-3a"></label>
+                        <input type="radio" id="rating-2a" name="rating1" value="2" /><label for="rating-2a"></label>
+                        <input type="radio" id="rating-1a" name="rating1" value="1" /><label for="rating-1a"></label>
+                    </div>
+                </div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><span class="questionSpan">What would help you do your job better?</span></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><textarea id="Q2" name="Text1" cols="40" rows="5"></textarea></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 rating">
+                    <div class="star-cb-group">
+                        <input type="radio" id="rating-5b" name="rating2" value="5" /><label for="rating-5b"></label>
+                        <input type="radio" id="rating-4b" name="rating2" value="4" /><label for="rating-4b"></label>
+                        <input type="radio" id="rating-3b" name="rating2" value="3" /><label for="rating-3b"></label>
+                        <input type="radio" id="rating-2b" name="rating2" value="2" /><label for="rating-2b"></label>
+                        <input type="radio" id="rating-1b" name="rating2" value="1" /><label for="rating-1b"></label>
+                    </div>
+                </div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><span class="questionSpan">What things get in the way of your job?</span></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><textarea id="Q3" name="Text1" cols="40" rows="5"></textarea></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 rating">
+                    <div class="star-cb-group">
+                        <input type="radio" id="rating-5c" name="rating3" value="5" /><label for="rating-5c"></label>
+                        <input type="radio" id="rating-4c" name="rating3" value="4" /><label for="rating-4c"></label>
+                        <input type="radio" id="rating-3c" name="rating3" value="3" /><label for="rating-3c"></label>
+                        <input type="radio" id="rating-2c" name="rating3" value="2" /><label for="rating-2c"></label>
+                        <input type="radio" id="rating-1c" name="rating3" value="1" /><label for="rating-1c"></label>
+                    </div>
+                </div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><span class="questionSpan">Free response - overall satisfaction</span></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><textarea id="Q4" name="Text1" cols="40" rows="5"></textarea></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 rating">
+                    <div class="star-cb-group">
+                        <input type="radio" id="rating-5d" name="rating4" value="5" /><label for="rating-5d"></label>
+                        <input type="radio" id="rating-4d" name="rating4" value="4" /><label for="rating-4d"></label>
+                        <input type="radio" id="rating-3d" name="rating4" value="3" /><label for="rating-3d"></label>
+                        <input type="radio" id="rating-2d" name="rating4" value="2" /><label for="rating-2d"></label>
+                        <input type="radio" id="rating-1d" name="rating4" value="1" /><label for="rating-1d"></label>
+                    </div>
+                </div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-04 col-md-05 col-sm-05 red"><button class="red hoverRed whiteBut" onclick="showTab(event, 'chooseDepartPage')">Back</button></div>
+                <div class="col-lg-04 col-md-02 col-sm-02 wht"></div>
+                <div class="col-lg-04 col-md-05 col-sm-05 blu"><button class="blu hoverBlu whiteBut" onclick="InsertFeedback()">Submit</button></div>
+            </div>
+            <br>
+        </div>
+    </div>
+
+    <div id="feedbackDetailPage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2 id="feedbackDetailHeader">Anonymous Feedback</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><span class="questionSpan">How do you feel about your job?</span></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><textarea id="viewDetailQ1" name="Text1" cols="40" rows="5"></textarea></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 rating">
+                    <div class="star-cb-group">
+                        <input class="viewFeedbackRatingStar" readonly type="radio" id="rating-5da" name="rating1d" value="5" /><label for="rating-5a"></label>
+                        <input class="viewFeedbackRatingStar" readonly type="radio" id="rating-4da" name="rating1d" value="4" /><label for="rating-4a"></label>
+                        <input class="viewFeedbackRatingStar" readonly type="radio" id="rating-3da" name="rating1d" value="3" /><label for="rating-3a"></label>
+                        <input class="viewFeedbackRatingStar" readonly type="radio" id="rating-2da" name="rating1d" value="2" /><label for="rating-2a"></label>
+                        <input class="viewFeedbackRatingStar" readonly type="radio" id="rating-1da" name="rating1d" value="1" /><label for="rating-1a"></label>
+                    </div>
+                </div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><span class="questionSpan">What would help you do your job better?</span></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><textarea id="viewDetailQ2" name="Text1" cols="40" rows="5"></textarea></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 rating">
+                    <div class="star-cb-group">
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-5db" name="rating2d" value="5" /><label for="rating-5db"></label>
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-4db" name="rating2d" value="4" /><label for="rating-4db"></label>
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-3db" name="rating2d" value="3" /><label for="rating-3db"></label>
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-2db" name="rating2d" value="2" /><label for="rating-2db"></label>
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-1db" name="rating2d" value="1" /><label for="rating-1db"></label>
+                    </div>
+                </div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><span class="questionSpan">What things get in the way of your job?</span></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><textarea id="viewDetailQ3" name="Text1" cols="40" rows="5"></textarea></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 rating">
+                    <div class="star-cb-group">
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-5dc" name="rating3d" value="5" /><label for="rating-5dc"></label>
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-4dc" name="rating3d" value="4" /><label for="rating-4dc"></label>
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-3dc" name="rating3d" value="3" /><label for="rating-3dc"></label>
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-2dc" name="rating3d" value="2" /><label for="rating-2dc"></label>
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-1dc" name="rating3d" value="1" /><label for="rating-1dc"></label>
+                    </div>
+                </div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><span class="questionSpan">Free response - overall satisfaction</span></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><textarea id="viewDetailQ4" name="Text1" cols="40" rows="5"></textarea></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 rating">
+                    <div class="star-cb-group">
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-5dd" name="rating4d" value="5" /><label for="rating-5dd"></label>
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-4dd" name="rating4d" value="4" /><label for="rating-4dd"></label>
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-3dd" name="rating4d" value="3" /><label for="rating-3dd"></label>
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-2dd" name="rating4d" value="2" /><label for="rating-2dd"></label>
+                        <input class="viewFeedbackRatingStar" type="radio" id="rating-1dd" name="rating4d" value="1" /><label for="rating-1dd"></label>
+                    </div>
+                </div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+                <div class="row">
+                    <div class="row">
+                        <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                        <div class="col-lg-10 col-md-12 col-sm-12 red"><button class="red hoverRed whiteBut" onclick="showTab(event, 'feedbackListPage')">Go Back</button></div>
+                        <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                    </div>
+                </div>
+            <br>
+        </div>
+    </div>
+
+    <div id="accountApprovalPage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Account Approval</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="ArDetailEmployeeId" type="text" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="ArDetailFirstName" type="text" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="ArDetailLastName" type="text" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="ArDetailEmail" type="text" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gre"><button class="gre hoverGre whiteBut" onclick="ApproveAccount(); setTimeout( LoadAccountRequests, 1000 )">Approve</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 red"><button class="red hoverRed whiteBut" onclick="DenyAccount(); setTimeout( LoadAccountRequests, 1000 )">Deny</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 org"><button class="org hoverorg whiteBut" onclick="showTab(event, 'accountsListPage')">Go Back</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br><br><br>
+        </div>
+    </div>
+
+    <div id="accountDisablePage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Disable Account</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="disableEmployeeId" type="text" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="disableFirstName" type="text" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="disableLastName" type="text" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="disableEmail" type="text" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gre"><button class="gre hoverGre whiteBut" onclick="DisableAccount(); setTimeout( LoadActiveAccounts, 1000 )">Disable Account</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 red"><button class="red hoverRed whiteBut" id="adminAccountButton" onclick="adminDecide(); setTimeout( LoadActiveAccounts, 1000 )">Make Admin</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 org"><button class="org hoverorg whiteBut" onclick="showTab(event, 'activeAccountsPage')">Go Back</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+        </div>
+    </div>
+
+    <div id="accountEnablePage" class="tabContent">
+        <br>
+        <div class="AppBackground">
+            <br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 wht titleHeader"><h2>Enable Account</h2></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="enableEmployeeId" type="text" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="enableFirstName" type="text" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="enableLastName" type="text" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12"><input id="enableEmail" type="text" class="text" value=""></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 gre"><button class="gre hoverGre whiteBut" onclick="EnableAccount(); setTimeout( LoadDisabledAccounts, 1000 )">Enable</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <div class="row">
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+                <div class="col-lg-10 col-md-12 col-sm-12 org"><button class="org hoverorg whiteBut" onclick="showTab(event, 'disableAccountListPage')">Go Back</button></div>
+                <div class="col-lg-01 col-md-00 col-sm-00 wht"></div>
+            </div>
+            <br><br>
+        </div>
+    </div>
+</body>
+</html>
